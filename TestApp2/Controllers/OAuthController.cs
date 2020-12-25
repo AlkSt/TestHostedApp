@@ -19,23 +19,19 @@ namespace TestApp2.Controllers
         private static readonly Dictionary<Guid, TokenModel> s_authorizationRequests = new Dictionary<Guid, TokenModel>();
 
         /// <summary>
-        /// Start a new authorization request. 
-        /// 
-        /// This creates a random state value that is used to correlate/validate the request in the callback later.
+        /// Запускает новый запрос авторизации.
+        /// Это создает случайное значение состояния, которое используется для корреляции/проверки запроса в обратном вызове позже.
         /// </summary>
         /// <returns></returns>
         public ActionResult Authorize()
         {
-            Session["info"] += "Hi, bro, you're in Authorise().\n";
             Guid state = Guid.NewGuid();
-
             s_authorizationRequests[state] = new TokenModel() { IsPending = true };
-
             return new RedirectResult(GetAuthorizationUrl(state.ToString()));
         }
 
         /// <summary>
-        /// Constructs an authorization URL with the specified state value.
+        /// Создает URL-адрес авторизации с указанным значением состояния.
         /// </summary>
         /// <param name="state"></param>
         /// <returns></returns>
@@ -50,22 +46,21 @@ namespace TestApp2.Controllers
             queryParams["scope"] = ConfigurationManager.AppSettings["Scope"];
             queryParams["redirect_uri"] = ConfigurationManager.AppSettings["CallbackUrl"];
 
-            uriBuilder.Query = "client_id=285F1BF4-69FA-487A-AF9A-F7F59494D3B3&response_type=Assertion&state=" + state + "&scope=vso.code%20vso.identity_manage&redirect_uri=https://appwithidentity.azurewebsites.net/oauth/callback";//queryParams.ToString();
+            //uriBuilder.Query = queryParams.ToString();
+            uriBuilder.Query = "client_id=68CE192E-36BA-4BAE-B4BD-0756685B7B5A&response_type=Assertion&state=" + state + "&scope=vso.agentpools%20vso.analytics%20vso.auditlog%20vso.build%20vso.code%20vso.dashboards%20vso.entitlements%20vso.extension%20vso.extension.data%20vso.graph%20vso.identity%20vso.loadtest%20vso.notification_diagnostics%20vso.packaging%20vso.project%20vso.release%20vso.serviceendpoint%20vso.symbols%20vso.taskgroups_read%20vso.test%20vso.tokenadministration%20vso.tokens%20vso.variablegroups_read%20vso.wiki%20vso.work&redirect_uri=https://testingtimeinfoapp.azurewebsites.net/oauth/callback";
 
             return uriBuilder.ToString();
         }
 
         /// <summary>
-        /// Callback action. Invoked after the user has authorized the app.
-        /// Gets token.
+        /// Действие обратного вызова. Вызывается после того, как пользователь авторизовал приложение.
+        /// Получает токен.
         /// </summary>
         /// <param name="code"></param>
         /// <param name="state"></param>
         /// <returns></returns>
         public async Task<ActionResult> Callback(String code, Guid state)
         {
-            Session["info"] += "Hi, bro, you're in Callback().\n";
-
             String error;
             if (ValidateCallbackValues(code, state.ToString(), out error))
             {
@@ -91,7 +86,7 @@ namespace TestApp2.Controllers
 
                     TokenModel tokenModel = s_authorizationRequests[state];
                     JsonConvert.PopulateObject(body, tokenModel);
-
+                    Session["token"] = tokenModel;
                     ViewBag.Token = tokenModel;
                 }
                 else
@@ -107,11 +102,13 @@ namespace TestApp2.Controllers
 
             ViewBag.ProfileUrl = ConfigurationManager.AppSettings["ProfileUrl"];
 
-            return View("TokenView");
+            return Redirect("/Home/Index");
+            //return View("TokenView");
         }
 
         /// <summary>
-        /// Ensures the specified auth code and state value are valid. If both are valid, the state value is marked so it can't be used again.        
+        /// Гарантирует, что указанный код аутентификации и значение состояния являются допустимыми.
+        /// Если оба они действительны, то значение состояния помечается так, чтобы его нельзя было использовать снова.       
         /// </summary>
         /// <param name="code"></param>
         /// <param name="state"></param>
@@ -145,7 +142,8 @@ namespace TestApp2.Controllers
                     }
                     else
                     {
-                        s_authorizationRequests[authorizationRequestKey].IsPending = false; // mark the state value as used so it can't be reused
+                        // отметьте значение состояния как используемое, чтобы его нельзя было использовать повторно
+                        s_authorizationRequests[authorizationRequestKey].IsPending = false; 
                     }
                 }
             }
@@ -163,7 +161,7 @@ namespace TestApp2.Controllers
             String error = null;
             if (!String.IsNullOrEmpty(refreshToken))
             {
-                // Form the request to exchange an auth code for an access token and refresh token
+                // Сформировать запрос на обмен кода аутентификации на токен доступа и токен обновления
                 HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Post, ConfigurationManager.AppSettings["TokenUrl"]);
                 requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -177,12 +175,12 @@ namespace TestApp2.Controllers
                 };
                 requestMessage.Content = new FormUrlEncodedContent(form);
 
-                // Make the request to exchange the auth code for an access token (and refresh token)
+                // Сделайте запрос на обмен кода аутентификации на токен доступа (и токен обновления)
                 HttpResponseMessage responseMessage = await s_httpClient.SendAsync(requestMessage);
 
                 if (responseMessage.IsSuccessStatusCode)
                 {
-                    // Handle successful request
+                    // Обрабатывать успешный запрос
                     String body = await responseMessage.Content.ReadAsStringAsync();
                     ViewBag.Token = JObject.Parse(body).ToObject<TokenModel>();
                 }
@@ -203,5 +201,6 @@ namespace TestApp2.Controllers
 
             return View("TokenView");
         }
+    
     }
 }
